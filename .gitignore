@@ -1,0 +1,43 @@
+# compiled output
+/dist
+/tmp
+
+# dependencies
+/node_modules
+
+npm-debug.log
+
+#----------------------------------------------------------------------------
+# MISC
+#----------------------------------------------------------------------------
+.*cache
+*.log
+cache/*
+backup
+_files
+log
+log/**/*
+.monitor
+Forwardfile
+
+# OS X Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.lnk
+*~
+
+# IDE FILES
+*.sublime-*
+*.tmproj
+
+# BOWER & BUILD TOOLS
+/build/*
+
+
+# NODE
+.node_modules
+node_modules
+functions/node_modules/
+/node_modules/*
