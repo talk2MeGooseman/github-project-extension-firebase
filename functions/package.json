@@ -12,5 +12,14 @@
     "firebase-admin": "~5.4.2",
     "firebase-functions": "^0.7.1"
   },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-preset-env": "^1.6.1",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0"
+  },
+  "scripts": {
+    "prepare": "babel ./*.es7 --retain-lines -d ./"
+  },
   "private": true
 }
