@@ -6,20 +6,20 @@
     "shell": "firebase experimental:functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
+    "prepare": "babel ./*.es7 --retain-lines -d ./",
     "logs": "firebase functions:log"
   },
   "dependencies": {
+    "cors": "^2.8.4",
+    "express": "^4.16.2",
     "firebase-admin": "~5.4.2",
     "firebase-functions": "^0.7.1"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
     "babel-plugin-transform-runtime": "^6.23.0",
-    "babel-preset-env": "^1.6.1",
-    "babel-plugin-transform-object-rest-spread": "^6.26.0"
-  },
-  "scripts": {
-    "prepare": "babel ./*.es7 --retain-lines -d ./"
+    "babel-preset-env": "^1.6.1"
   },
   "private": true
 }
