@@ -10,11 +10,10 @@ const cors = require('cors')({origin: true});
 // Set env configs by firebase functions:config:set github.secret="SECRET"
 // Access set env configs via functions.config()
 const db = admin.firestore();
-
-function verifyToken(token, secret) {
-  const secret_decoded = new Buffer(secret, 'base64')
-  decoded = jwt.verify(token, secret_decoded);
-}
+const GITHUB_BASE_URL = 'https://api.github.com';
+const JWT_HEADER = 'x-extension-jwt';
+const BROADCASTER_COLLECTION = 'broadcasters';
+const REPOS_COLLECTION = 'repos';
 
 function getSecret() {
     if (functions.config().twitch) {
@@ -24,10 +23,93 @@ function getSecret() {
     } 
 }
 
-exports.fetchBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
+function verifyToken(token, secret) {
+  const secret_decoded = new Buffer(secret, 'base64');
+  const decoded = jwt.verify(token, secret_decoded);
+  if(decoded.role != 'broadcaster') throw 'Must be broadcaster role.'
+
+  return decoded;
+}
+
+async function getGithubUser(username, decoded) {
+  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
+
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+  saveRef.doc(decoded.channel_id).set({
+    user_id: decoded.user_id,
+    github_user: {
+      login: data.login,
+      avatar_url: data.avatar_url,
+      repos_url: data.repos_url,
+      public_repos: data.public_repos,
+    
+    }
+  }, { merge: true });
+
+  return data;
+}
+
+async function getGithubUserRepos(username, channel_id) {
+  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}/repos`, { type: 'all'});
+
+  var batch = db.batch();
+  var reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
+
+  data.forEach(repo => {
+    let { name, html_url, full_name, description, language } = repo;
+    let localRepoRef = reposRef.doc(`${repo.id}`);
+    batch.set(localRepoRef, {
+      name,
+      html_url,
+      full_name,
+      description,
+      language,
+    })
+  });
+
+  // Commit the batch
+  return batch.commit().then(function () {
+    return data;
+  });
+}
+
+
+
+async function getBroadcasterRepos(channel_id) {
+  const reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
+
+  try {
+    const reposCollection = await reposRef.get(); 
+    let repos = [];
+    reposCollection.forEach(repoSnap => {
+      let repoData = repoSnap.data();
+      repoData.id = repoSnap.id;
+      repos.push(repoData);
+    });
+
+    return repos;
+  } catch (error) {
+    console.log(error);
+    return null; 
+  }
+}
+
+async function getBroadcasterInfo(channel_id) {
+  const channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
+  try {
+    const doc = await channelRef.get(); 
+    // returns promise till data is resolved
+    return doc.data();
+  } catch (error) {
+    console.log(error);
+    return null; 
+  }
+}
+
+exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    let response;
-    let status_code;
+    let response = {};
+    let status_code = 200;
     let decoded;
 
     const { username } = req.param('data');
@@ -35,34 +117,53 @@ exports.fetchBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     const secret = getSecret();    
 
     try {
-      verifyToken(token, secret);
+      decoded = verifyToken(auth.token, secret);
     } catch(err) {
-      console.log('JWT was invalid');
+      console.log('JWT was invalid', err);
       res.status(401).json({});
       return;
     }
 
     try {
-      const { data } = await axios.get(`https://api.github.com/users/${username}`);
-      status_code = 200;
-
-      var saveRef = db.collection("brodcasters");
-
-      saveRef.doc(decoded.channel_id).set({
-        user_id: decoded.user_id,
-        github_user: {
-          login:  data.login,
-          avatar_url: data.avatar_url,
-          repos_url: data.repos_url,
-          public_repos: data.public_repos,
-        }
-      });
+      let user = getGithubUser(username, decoded);
+      let repos = await getGithubUserRepos(username, decoded.channel_id);
+      response = {
+        user,
+        repos
+      }
     } catch (error) {
       status_code = 400;
-      response = {};
       console.log(error)
     }
 
-    res.status(status_code).json({});
+    res.status(status_code).json(response);
+  });
+});
+
+exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      const token = req.get(JWT_HEADER);
+      const secret = getSecret();    
+
+      // Should be generic
+      let decoded = verifyToken(token, secret);
+      let user = await getBroadcasterInfo(decoded.channel_id);
+
+      let repos;
+      if(user) {
+        repos = await getBroadcasterRepos(decoded.channel_id);
+      }
+
+      if (user && repos) {
+        res.status(200).json({ user, repos });
+      } else {
+        res.status(404).end();
+      }
+
+    } catch (error) {
+      console.log(error)
+      res.status(500).end();
+    }
   });
 });
