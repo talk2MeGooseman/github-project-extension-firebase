@@ -23,15 +23,19 @@ function getSecret() {
     } 
 }
 
-function verifyToken(token, secret) {
+function decodeToken(token, secret) {
   const secret_decoded = new Buffer(secret, 'base64');
-  const decoded = jwt.verify(token, secret_decoded);
+  return jwt.verify(token, secret_decoded);
+}
+
+function verifyToken(token, secret) {
+  const decoded = decodeToken(token, secret);
   if(decoded.role != 'broadcaster') throw 'Must be broadcaster role.'
 
   return decoded;
 }
 
-async function getGithubUser(username, decoded) {
+async function setBroadcasterGithubUser(username, decoded) {
   const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
 
   var saveRef = db.collection(BROADCASTER_COLLECTION);
@@ -47,6 +51,16 @@ async function getGithubUser(username, decoded) {
   }, { merge: true });
 
   return data;
+}
+
+async function updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded) {
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+  return saveRef.doc(decoded.channel_id).set({
+    github_user: {
+      avatar_url: avatar_url,
+    },
+    selected_repos: selected_repos,
+  }, { merge: true });
 }
 
 async function getGithubUserRepos(username, channel_id) {
@@ -73,7 +87,14 @@ async function getGithubUserRepos(username, channel_id) {
   });
 }
 
-
+async function getSelectedRepos(channel_id, selected_repos) {
+  var reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
+  
+  return selected_repos.map(async (repo_id) => {
+    const doc = await reposRef.doc(repo_id).get();
+    return doc.data();
+  });
+}
 
 async function getBroadcasterRepos(channel_id) {
   const reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
@@ -125,8 +146,9 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     }
 
     try {
-      let user = getGithubUser(username, decoded);
+      let user = setBroadcasterGithubUser(username, decoded);
       let repos = await getGithubUserRepos(username, decoded.channel_id);
+
       response = {
         user,
         repos
@@ -165,5 +187,96 @@ exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
       console.log(error)
       res.status(500).end();
     }
+  });
+});
+
+exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      const token = req.get(JWT_HEADER);
+      const secret = getSecret();    
+      let decoded;
+
+      try {
+        decoded = decodeToken(token, secret);
+      } catch (error) {
+        console.log('Token was invalid');
+        res.status(403).end();
+      }
+
+      let user = await getBroadcasterInfo(decoded.channel_id);
+
+      let repos = [];
+      if(user) {
+        let data = await getSelectedRepos(decoded.channel_id, user.selected_repos);
+        for (let index = 0; index < data.length; index++) {
+          let repo = await data[index];
+          console.log(repo);
+          repos.push(repo)
+        }
+      }
+
+      if (user && repos) {
+        res.status(200).json({ user, repos });
+      } else {
+        res.status(404).end();
+      }
+
+    } catch (error) {
+      console.log(error)
+      res.status(500).end();
+    }
+  });
+})
+
+exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    let response = {};
+    let status_code = 200;
+    let decoded;
+
+    const { avatar_url, selected_repos} = req.param('data');
+    const auth = req.param('auth');
+    const secret = getSecret();    
+
+    try {
+      decoded = verifyToken(auth.token, secret);
+
+      if (selected_repos.length === 0) {
+          throw('Must have at least one Github Project selected');
+      }
+    } catch(err) {
+      console.log('JWT was invalid', err);
+      res.status(401).json({error: err});
+      return;
+    }
+
+    try {
+      let user = await getBroadcasterInfo(decoded.channel_id);
+
+      if(user) {
+        let repos = await getBroadcasterRepos(decoded.channel_id);
+        let exists = selected_repos.every((repo_id) => {
+          return repos.find((repo) => {
+            return repo.id === repo_id;
+          });
+        }); 
+
+        if (!exists) {
+          res.status(400).json({ error: 'Error happend during config, please start over' });
+        }
+
+        let result = await updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded);
+        status_code = 201;
+        response = { result };
+      } else {
+        res.status(400).json({ error: 'Your Github information does not exist, please restart setup'});
+      }
+    } catch (error) {
+      status_code = 400;
+      console.log(error)
+    }
+
+    res.status(status_code).json(response);
   });
 });
