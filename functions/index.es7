@@ -15,6 +15,12 @@ const JWT_HEADER = 'x-extension-jwt';
 const BROADCASTER_COLLECTION = 'broadcasters';
 const REPOS_COLLECTION = 'repos';
 
+const TWITCH_BASE_EXTENSION_URL = 'https://api.twitch.tv/extensions';
+const EXTENSION_VERSION = '0.0.1';
+const EXTENSION_ID = 'yncbd7i177on3ia536r307nlvt8g1w';
+const EXTENSTION_USER_ID = '120750024';
+const CONFIG_KEY = 'config-1';
+
 function getSecret() {
     if (functions.config().twitch) {
       return functions.config().twitch.secret;
@@ -35,11 +41,46 @@ function verifyToken(token, secret) {
   return decoded;
 }
 
+function signToken(secret) {
+  const secret_decoded = new Buffer(secret, 'base64');
+  const tokenObj = {
+    "user_id": EXTENSTION_USER_ID,
+    "role": "external"    
+  };
+
+  return jwt.sign(tokenObj, secret_decoded, {
+    expiresIn: '1h'
+  });
+}
+
+async function setExtensionConfigured(channel_id) {
+  try {
+    const token = signToken(getSecret());
+
+    let response = await axios({
+      method: 'PUT',
+      url: `${TWITCH_BASE_EXTENSION_URL}/${EXTENSION_ID}/${EXTENSION_VERSION}/required_configuration?channel_id=${channel_id}`,
+      data: {
+        "required_configuration": CONFIG_KEY,
+      },
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-id': EXTENSION_ID,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    return await response.json;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
 async function setBroadcasterGithubUser(username, decoded) {
   const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
 
   var saveRef = db.collection(BROADCASTER_COLLECTION);
-  saveRef.doc(decoded.channel_id).set({
+  const user = {
     user_id: decoded.user_id,
     github_user: {
       login: data.login,
@@ -48,9 +89,10 @@ async function setBroadcasterGithubUser(username, decoded) {
       public_repos: data.public_repos,
     
     }
-  }, { merge: true });
+  };
+  saveRef.doc(decoded.channel_id).set(user);
 
-  return data;
+  return user;
 }
 
 async function updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded) {
@@ -59,6 +101,13 @@ async function updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decod
     github_user: {
       avatar_url: avatar_url,
     },
+    selected_repos: selected_repos,
+  }, { merge: true });
+}
+
+async function updateSelectedRepos(selected_repos, decoded) {
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+  return saveRef.doc(decoded.channel_id).set({
     selected_repos: selected_repos,
   }, { merge: true });
 }
@@ -146,7 +195,7 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     }
 
     try {
-      let user = setBroadcasterGithubUser(username, decoded);
+      let user = await setBroadcasterGithubUser(username, decoded);
       let repos = await getGithubUserRepos(username, decoded.channel_id);
 
       response = {
@@ -229,6 +278,39 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
   });
 })
 
+exports.selectedReposOrder = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    let response = {};
+    let status_code = 200;
+    let decoded;
+
+    const token = req.get(JWT_HEADER);
+    const secret = getSecret();    
+    const selected_repos = req.param('selected_repos');
+
+    try {
+      decoded = verifyToken(token, secret);
+    } catch (error) {
+      console.log('JWT was invalid', err);
+      res.status(401).json({error: err});
+      return;
+    }
+
+    try {
+      if (selected_repos.length === 0) {
+        throw ('Must have at least one Github Project selected');
+      }           
+
+      await updateSelectedRepos(selected_repos, decoded);
+    } catch (error) {
+      response = { error: 'something went wrong saving your selected repos'};
+      status_code = 400;
+    }
+
+    res.status(status_code).json(response);
+  })
+})
+
 exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     let response = {};
@@ -269,9 +351,12 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
         let result = await updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded);
         status_code = 201;
         response = { result };
+
       } else {
         res.status(400).json({ error: 'Your Github information does not exist, please restart setup'});
       }
+
+      setExtensionConfigured(decoded.channel_id);
     } catch (error) {
       status_code = 400;
       console.log(error)
