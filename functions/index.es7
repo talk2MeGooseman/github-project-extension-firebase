@@ -76,10 +76,10 @@ async function setExtensionConfigured(channel_id) {
   }
 }
 
-async function setBroadcasterGithubUser(username, decoded) {
+async function getUserGithub(username, decoded) {
   const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
+  const repos = await getGithubRepos(username, decoded.channel_id);
 
-  var saveRef = db.collection(BROADCASTER_COLLECTION);
   const user = {
     user_id: decoded.user_id,
     github_user: {
@@ -87,81 +87,65 @@ async function setBroadcasterGithubUser(username, decoded) {
       avatar_url: data.avatar_url,
       repos_url: data.repos_url,
       public_repos: data.public_repos,
-    
-    }
+    },
+    repos
   };
-  saveRef.doc(decoded.channel_id).set(user);
 
   return user;
 }
 
-async function updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded) {
-  var saveRef = db.collection(BROADCASTER_COLLECTION);
-  return saveRef.doc(decoded.channel_id).set({
-    github_user: {
-      avatar_url: avatar_url,
-    },
-    selected_repos: selected_repos,
-  }, { merge: true });
-}
-
-async function updateSelectedRepos(selected_repos, decoded) {
-  var saveRef = db.collection(BROADCASTER_COLLECTION);
-  return saveRef.doc(decoded.channel_id).set({
-    selected_repos: selected_repos,
-  }, { merge: true });
-}
-
-async function getGithubUserRepos(username, channel_id) {
+async function getGithubRepos(username, channel_id) {
   const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}/repos`, { type: 'all'});
 
-  var batch = db.batch();
-  var reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
-
-  data.forEach(repo => {
-    let { name, html_url, full_name, description, language } = repo;
-    let localRepoRef = reposRef.doc(`${repo.id}`);
-    batch.set(localRepoRef, {
+  // Fetch the data we want from each repo
+  return data.map(repo => {
+    let { id, name, html_url, full_name, description, language } = repo;
+    return {
+      id: id.toString(),
       name,
       html_url,
       full_name,
       description,
       language,
-    })
+    };
   });
+}
 
-  // Commit the batch
-  return batch.commit().then(function () {
-    return data;
-  });
+function saveGithubInfo(data, decoded) {
+  try {
+    db.collection(BROADCASTER_COLLECTION).doc(decoded.channel_id).delete();
+  }
+  catch (error) {
+    // Do nothing    
+  }
+
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+
+  saveRef.doc(decoded.channel_id).set(data);
+}
+
+async function setSelectedRepos(selected_repos, decoded) {
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+  return saveRef.doc(decoded.channel_id).set({
+    selected_repos: selected_repos,
+  }, { merge: true });
 }
 
 async function getSelectedRepos(channel_id, selected_repos) {
-  var reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
-  
-  return selected_repos.map(async (repo_id) => {
-    const doc = await reposRef.doc(repo_id).get();
-    return doc.data();
-  });
-}
-
-async function getBroadcasterRepos(channel_id) {
-  const reposRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id).collection(REPOS_COLLECTION);
+  var channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
 
   try {
-    const reposCollection = await reposRef.get(); 
-    let repos = [];
-    reposCollection.forEach(repoSnap => {
-      let repoData = repoSnap.data();
-      repoData.id = repoSnap.id;
-      repos.push(repoData);
-    });
-
-    return repos;
+    const doc = await channelRef.get(); 
+    // returns promise till data is resolved
+    const userData = await doc.data();
   } catch (error) {
     console.log(error);
     return null; 
-  }
+  } 
+
+  return userData.selected_repos.map((repo_id) => {
+    return userData.repos.find((repo) => repo.id === repo_id);
+  });
 }
 
 async function getBroadcasterInfo(channel_id) {
@@ -195,13 +179,9 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     }
 
     try {
-      let user = await setBroadcasterGithubUser(username, decoded);
-      let repos = await getGithubUserRepos(username, decoded.channel_id);
-
-      response = {
-        user,
-        repos
-      }
+      let response = await getUserGithub(username, decoded);
+      console.log(response);
+      await saveGithubInfo(response, decoded);
     } catch (error) {
       status_code = 400;
       console.log(error)
@@ -214,20 +194,18 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
 exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     try {
+      // Get token from header
       const token = req.get(JWT_HEADER);
       const secret = getSecret();    
 
-      // Should be generic
+      // Verify our token
       let decoded = verifyToken(token, secret);
+
+      // Get user info for channel with token
       let user = await getBroadcasterInfo(decoded.channel_id);
 
-      let repos;
-      if(user) {
-        repos = await getBroadcasterRepos(decoded.channel_id);
-      }
-
-      if (user && repos) {
-        res.status(200).json({ user, repos });
+      if (user) {
+        res.status(200).json(user);
       } else {
         res.status(404).end();
       }
@@ -301,7 +279,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
         throw ('Must have at least one Github Project selected');
       }           
 
-      await updateSelectedRepos(selected_repos, decoded);
+      await setSelectedRepos(selected_repos, decoded);
     } catch (error) {
       response = { error: 'something went wrong saving your selected repos'};
       status_code = 400;
@@ -317,7 +295,7 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
     let status_code = 200;
     let decoded;
 
-    const { avatar_url, selected_repos} = req.param('data');
+    const { selected_repos} = req.param('data');
     const auth = req.param('auth');
     const secret = getSecret();    
 
@@ -337,9 +315,9 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
       let user = await getBroadcasterInfo(decoded.channel_id);
 
       if(user) {
-        let repos = await getBroadcasterRepos(decoded.channel_id);
+        // Validate the selected repos belong to user
         let exists = selected_repos.every((repo_id) => {
-          return repos.find((repo) => {
+          return user.repos.find((repo) => {
             return repo.id === repo_id;
           });
         }); 
@@ -348,10 +326,8 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
           res.status(400).json({ error: 'Error happend during config, please start over' });
         }
 
-        let result = await updateBroadcasterGithubUserInfo(avatar_url, selected_repos, decoded);
+        await setSelectedRepos(selected_repos, decoded);
         status_code = 201;
-        response = { result };
-
       } else {
         res.status(400).json({ error: 'Your Github information does not exist, please restart setup'});
       }
