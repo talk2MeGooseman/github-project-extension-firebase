@@ -109,27 +109,22 @@
         language };
 
     });
-  });return function getGithubRepos(_x4, _x5) {return _ref3.apply(this, arguments);};})();let setSelectedRepos = (() => {var _ref4 = (0, _asyncToGenerator3.default)(
+  });return function getGithubRepos(_x4, _x5) {return _ref3.apply(this, arguments);};})();let saveGithubInfo = (() => {var _ref4 = (0, _asyncToGenerator3.default)(
 
+  function* (data, decoded) {
+    var saveRef = db.collection(BROADCASTER_COLLECTION);
 
-
-
-
-
-
-
-
-
-
-
-
+    saveRef.doc(decoded.channel_id).set(data);
+  });return function saveGithubInfo(_x6, _x7) {return _ref4.apply(this, arguments);};})();let setSelectedRepos = (() => {var _ref5 = (0, _asyncToGenerator3.default)(
 
   function* (selected_repos, decoded) {
     var saveRef = db.collection(BROADCASTER_COLLECTION);
-    return saveRef.doc(decoded.channel_id).set({
+    yield saveRef.doc(decoded.channel_id).set({
       selected_repos: selected_repos },
     { merge: true });
-  });return function setSelectedRepos(_x6, _x7) {return _ref4.apply(this, arguments);};})();let getSelectedRepos = (() => {var _ref5 = (0, _asyncToGenerator3.default)(
+
+    return getBroadcasterInfo(decoded.channel_id);
+  });return function setSelectedRepos(_x8, _x9) {return _ref5.apply(this, arguments);};})();let getSelectedRepos = (() => {var _ref6 = (0, _asyncToGenerator3.default)(
 
   function* (channel_id, selected_repos) {
     var channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
@@ -146,7 +141,7 @@
     return userData.selected_repos.map(function (repo_id) {
       return userData.repos.find(function (repo) {return repo.id === repo_id;});
     });
-  });return function getSelectedRepos(_x8, _x9) {return _ref5.apply(this, arguments);};})();let getBroadcasterInfo = (() => {var _ref6 = (0, _asyncToGenerator3.default)(
+  });return function getSelectedRepos(_x10, _x11) {return _ref6.apply(this, arguments);};})();let getBroadcasterInfo = (() => {var _ref7 = (0, _asyncToGenerator3.default)(
 
   function* (channel_id) {
     const channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
@@ -158,12 +153,10 @@
       console.log(error);
       return null;
     }
-  });return function getBroadcasterInfo(_x10) {return _ref6.apply(this, arguments);};})();function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}const functions = require('firebase-functions');const axios = require('axios');const jwt = require('jsonwebtoken');const secrets = require('./secrets'); // The Firebase Admin SDK to access the Firebase Realtime Database. 
+  });return function getBroadcasterInfo(_x12) {return _ref7.apply(this, arguments);};})();function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}const functions = require('firebase-functions');const axios = require('axios');const jwt = require('jsonwebtoken');const secrets = require('./secrets'); // The Firebase Admin SDK to access the Firebase Realtime Database. 
 const admin = require('firebase-admin');admin.initializeApp(functions.config().firebase);const cors = require('cors')({ origin: true }); // Set env configs by firebase functions:config:set github.secret="SECRET"
 // Access set env configs via functions.config()
-const db = admin.firestore();const GITHUB_BASE_URL = 'https://api.github.com';const JWT_HEADER = 'x-extension-jwt';const BROADCASTER_COLLECTION = 'broadcasters';const REPOS_COLLECTION = 'repos';const TWITCH_BASE_EXTENSION_URL = 'https://api.twitch.tv/extensions';const EXTENSION_VERSION = '0.0.1';const EXTENSION_ID = 'yncbd7i177on3ia536r307nlvt8g1w';const EXTENSTION_USER_ID = '120750024';const CONFIG_KEY = 'config-1';function getSecret() {if (functions.config().twitch) {return functions.config().twitch.secret;} else {return secrets['twitch']['secret'];}}function decodeToken(token, secret) {const secret_decoded = new Buffer(secret, 'base64');return jwt.verify(token, secret_decoded);}function verifyToken(token, secret) {const decoded = decodeToken(token, secret);if (decoded.role != 'broadcaster') throw 'Must be broadcaster role.';return decoded;}function signToken(secret) {const secret_decoded = new Buffer(secret, 'base64');const tokenObj = { "user_id": EXTENSTION_USER_ID, "role": "external" };return jwt.sign(tokenObj, secret_decoded, { expiresIn: '1h' });}function saveGithubInfo(data, decoded) {try {db.collection(BROADCASTER_COLLECTION).doc(decoded.channel_id).delete();} catch (error) {// Do nothing    
-  }var saveRef = db.collection(BROADCASTER_COLLECTION);saveRef.doc(decoded.channel_id).set(data);}exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {cors(req, res, (0, _asyncToGenerator3.default)(function* () {let response = {};
-    let status_code = 200;
+const db = admin.firestore();const GITHUB_BASE_URL = 'https://api.github.com';const JWT_HEADER = 'x-extension-jwt';const BROADCASTER_COLLECTION = 'broadcasters';const REPOS_COLLECTION = 'repos';const TWITCH_BASE_EXTENSION_URL = 'https://api.twitch.tv/extensions';const EXTENSION_VERSION = '0.0.1';const EXTENSION_ID = 'yncbd7i177on3ia536r307nlvt8g1w';const EXTENSTION_USER_ID = '120750024';const CONFIG_KEY = 'config-1';function getSecret() {if (functions.config().twitch) {return functions.config().twitch.secret;} else {return secrets['twitch']['secret'];}}function decodeToken(token, secret) {const secret_decoded = new Buffer(secret, 'base64');return jwt.verify(token, secret_decoded);}function verifyToken(token, secret) {const decoded = decodeToken(token, secret);if (decoded.role != 'broadcaster') throw 'Must be broadcaster role.';return decoded;}function signToken(secret) {const secret_decoded = new Buffer(secret, 'base64');const tokenObj = { "user_id": EXTENSTION_USER_ID, "role": "external" };return jwt.sign(tokenObj, secret_decoded, { expiresIn: '1h' });}exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {cors(req, res, (0, _asyncToGenerator3.default)(function* () {
     let decoded;
 
     const { username } = req.param('data');
@@ -178,15 +171,18 @@ const db = admin.firestore();const GITHUB_BASE_URL = 'https://api.github.com';co
       return;
     }
 
+    let response = {};
+    let status_code = 200;
     try {
-      let response = yield getUserGithub(username, decoded);
-      console.log(response);
+      response = yield getUserGithub(username, decoded);
       yield saveGithubInfo(response, decoded);
     } catch (error) {
       status_code = 400;
       console.log(error);
+      response = {};
     }
 
+    console.log(response);
     res.status(status_code).json(response);
   }));
 });
@@ -235,12 +231,11 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
 
       let repos = [];
       if (user) {
-        let data = yield getSelectedRepos(decoded.channel_id, user.selected_repos);
-        for (let index = 0; index < data.length; index++) {
-          let repo = yield data[index];
-          console.log(repo);
-          repos.push(repo);
-        }
+        repos = user.selected_repos.map(function (repo_id) {
+          return user.repos.find(function (repo) {
+            return repo.id === repo_id;
+          });
+        });
       }
 
       if (user && repos) {
@@ -289,7 +284,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
   }));
 });
 
-exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) => {
+exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
   cors(req, res, (0, _asyncToGenerator3.default)(function* () {
     let response = {};
     let status_code = 200;
@@ -299,6 +294,7 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
     const auth = req.param('auth');
     const secret = getSecret();
 
+    // Validate token and fetch data
     try {
       decoded = verifyToken(auth.token, secret);
 
@@ -326,7 +322,7 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
           res.status(400).json({ error: 'Error happend during config, please start over' });
         }
 
-        yield setSelectedRepos(selected_repos, decoded);
+        response = yield setSelectedRepos(selected_repos, decoded);
         status_code = 201;
       } else {
         res.status(400).json({ error: 'Your Github information does not exist, please restart setup' });

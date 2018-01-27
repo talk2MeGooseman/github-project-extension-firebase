@@ -111,14 +111,7 @@ async function getGithubRepos(username, channel_id) {
   });
 }
 
-function saveGithubInfo(data, decoded) {
-  try {
-    db.collection(BROADCASTER_COLLECTION).doc(decoded.channel_id).delete();
-  }
-  catch (error) {
-    // Do nothing    
-  }
-
+async function saveGithubInfo(data, decoded) {
   var saveRef = db.collection(BROADCASTER_COLLECTION);
 
   saveRef.doc(decoded.channel_id).set(data);
@@ -126,9 +119,11 @@ function saveGithubInfo(data, decoded) {
 
 async function setSelectedRepos(selected_repos, decoded) {
   var saveRef = db.collection(BROADCASTER_COLLECTION);
-  return saveRef.doc(decoded.channel_id).set({
+  await saveRef.doc(decoded.channel_id).set({
     selected_repos: selected_repos,
   }, { merge: true });
+
+  return getBroadcasterInfo(decoded.channel_id);
 }
 
 async function getSelectedRepos(channel_id, selected_repos) {
@@ -162,8 +157,6 @@ async function getBroadcasterInfo(channel_id) {
 
 exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    let response = {};
-    let status_code = 200;
     let decoded;
 
     const { username } = req.param('data');
@@ -178,15 +171,18 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
       return;
     }
 
+    let response = {};
+    let status_code = 200;
     try {
-      let response = await getUserGithub(username, decoded);
-      console.log(response);
+      response = await getUserGithub(username, decoded);
       await saveGithubInfo(response, decoded);
     } catch (error) {
       status_code = 400;
       console.log(error)
+      response = { };
     }
 
+    console.log(response)
     res.status(status_code).json(response);
   });
 });
@@ -235,12 +231,11 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
 
       let repos = [];
       if(user) {
-        let data = await getSelectedRepos(decoded.channel_id, user.selected_repos);
-        for (let index = 0; index < data.length; index++) {
-          let repo = await data[index];
-          console.log(repo);
-          repos.push(repo)
-        }
+        repos = user.selected_repos.map((repo_id) => {
+          return user.repos.find((repo) => {
+            return repo.id === repo_id;
+          });
+        });
       }
 
       if (user && repos) {
@@ -289,7 +284,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
   })
 })
 
-exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) => {
+exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     let response = {};
     let status_code = 200;
@@ -299,6 +294,7 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
     const auth = req.param('auth');
     const secret = getSecret();    
 
+    // Validate token and fetch data
     try {
       decoded = verifyToken(auth.token, secret);
 
@@ -326,7 +322,7 @@ exports.updateBroadcasterGithubConfigs = functions.https.onRequest((req, res) =>
           res.status(400).json({ error: 'Error happend during config, please start over' });
         }
 
-        await setSelectedRepos(selected_repos, decoded);
+        response = await setSelectedRepos(selected_repos, decoded);
         status_code = 201;
       } else {
         res.status(400).json({ error: 'Your Github information does not exist, please restart setup'});
