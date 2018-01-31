@@ -1,6 +1,10 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+
 admin.initializeApp(functions.config().firebase);
+// Set env configs by firebase functions:config:set github.secret="SECRET"
+// Access set env configs via functions.config()
+const db = admin.firestore();
 
 import axios from 'axios';
 
@@ -17,20 +21,18 @@ import {
   getUserGithub,
   getGithubRepos
 } from "./GithubAPI";
-import FirebaseAPI from "./Firebase";
-const {
+import {
   saveGithubInfo,
   setSelectedRepos,
   getBroadcasterInfo,
   getSelectedRepos
-} = FirebaseAPI(admin);
+} from "./Firebase";
+import { JWT_HEADER } from "./Constants";
 
 // The Firebase Admin SDK to access the Firebase Realtime Database. 
 const cors = require('cors')({
   origin: true
 });
-
-const JWT_HEADER = 'x-extension-jwt';
 
 function getSecret() {
   if (functions.config().twitch) {
@@ -62,7 +64,7 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     let status_code = 200;
     try {
       response = await getUserGithub(username, decoded);
-      await saveGithubInfo(response, decoded);
+      await saveGithubInfo(db, response, decoded);
     } catch (error) {
       status_code = 400;
       console.log(error)
@@ -85,7 +87,7 @@ exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
       let decoded = verifyToken(token, secret);
 
       // Get user info for channel with token
-      let user = await getBroadcasterInfo(decoded.channel_id);
+      let user = await getBroadcasterInfo(db, decoded.channel_id);
 
       if (user) {
         res.status(200).json(user);
@@ -114,7 +116,7 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
         res.status(403).end();
       }
 
-      let user = await getBroadcasterInfo(decoded.channel_id);
+      let user = await getBroadcasterInfo(db, decoded.channel_id);
 
       let repos = [];
       if (user) {
@@ -166,7 +168,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
         throw ('Must have at least one Github Project selected');
       }
 
-      await setSelectedRepos(selected_repos, decoded);
+      await setSelectedRepos(db, selected_repos, decoded);
     } catch (error) {
       response = {
         error: 'something went wrong saving your selected repos'
@@ -206,7 +208,7 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
     }
 
     try {
-      let user = await getBroadcasterInfo(decoded.channel_id);
+      let user = await getBroadcasterInfo(db, decoded.channel_id);
 
       if (user) {
         // Validate the selected repos belong to user
@@ -222,7 +224,7 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
           });
         }
 
-        response = await setSelectedRepos(selected_repos, decoded);
+        response = await setSelectedRepos(db, selected_repos, decoded);
         status_code = 201;
       } else {
         res.status(400).json({

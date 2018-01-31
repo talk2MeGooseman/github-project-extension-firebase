@@ -1,5 +1,6 @@
-'use strict';var _asyncToGenerator2 = require('babel-runtime/helpers/asyncToGenerator');var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);var _firebaseFunctions = require('firebase-functions');var functions = _interopRequireWildcard(_firebaseFunctions);
+'use strict';var _firebaseFunctions = require('firebase-functions');var functions = _interopRequireWildcard(_firebaseFunctions);
 var _firebaseAdmin = require('firebase-admin');var admin = _interopRequireWildcard(_firebaseAdmin);
+
 
 
 
@@ -20,19 +21,18 @@ var _GithubAPI = require('./GithubAPI');
 
 
 
-var _Firebase = require('./Firebase');function _interopRequireWildcard(obj) {if (obj && obj.__esModule) {return obj;} else {var newObj = {};if (obj != null) {for (var key in obj) {if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key];}}newObj.default = obj;return newObj;}}function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}admin.initializeApp(functions.config().firebase); // Set env configs by firebase functions:config:set github.secret="SECRET"
+var _Firebase = require('./Firebase');
+
+
+
+
+
+var _Constants = require('./Constants');function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}function _interopRequireWildcard(obj) {if (obj && obj.__esModule) {return obj;} else {var newObj = {};if (obj != null) {for (var key in obj) {if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key];}}newObj.default = obj;return newObj;}}admin.initializeApp(functions.config().firebase); // Set env configs by firebase functions:config:set github.secret="SECRET"
 // Access set env configs via functions.config()
-const db = admin.firestore();
-
-
-
-
-// The Firebase Admin SDK to access the Firebase Realtime Database. 
+const db = admin.firestore(); // The Firebase Admin SDK to access the Firebase Realtime Database. 
 const cors = require('cors')({
   origin: true });
 
-
-const JWT_HEADER = 'x-extension-jwt';
 
 function getSecret() {
   if (functions.config().twitch) {
@@ -43,7 +43,7 @@ function getSecret() {
 }
 
 exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
-  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+  cors(req, res, async () => {
     let decoded;
 
     const {
@@ -63,8 +63,8 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     let response = {};
     let status_code = 200;
     try {
-      response = yield (0, _GithubAPI.getUserGithub)(username, decoded);
-      yield (0, _Firebase.saveGithubInfo)(response, decoded);
+      response = await (0, _GithubAPI.getUserGithub)(username, decoded);
+      await (0, _Firebase.saveGithubInfo)(db, response, decoded);
     } catch (error) {
       status_code = 400;
       console.log(error);
@@ -73,21 +73,21 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
 
     console.log(response);
     res.status(status_code).json(response);
-  }));
+  });
 });
 
 exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
-  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+  cors(req, res, async () => {
     try {
       // Get token from header
-      const token = req.get(JWT_HEADER);
+      const token = req.get(_Constants.JWT_HEADER);
       const secret = getSecret();
 
       // Verify our token
       let decoded = (0, _AuthToken.verifyToken)(token, secret);
 
       // Get user info for channel with token
-      let user = yield (0, _Firebase.getBroadcasterInfo)(decoded.channel_id);
+      let user = await (0, _Firebase.getBroadcasterInfo)(db, decoded.channel_id);
 
       if (user) {
         res.status(200).json(user);
@@ -99,13 +99,13 @@ exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
       console.log(error);
       res.status(500).end();
     }
-  }));
+  });
 });
 
 exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
-  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+  cors(req, res, async () => {
     try {
-      const token = req.get(JWT_HEADER);
+      const token = req.get(_Constants.JWT_HEADER);
       const secret = getSecret();
       let decoded;
 
@@ -116,12 +116,12 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
         res.status(403).end();
       }
 
-      let user = yield (0, _Firebase.getBroadcasterInfo)(decoded.channel_id);
+      let user = await (0, _Firebase.getBroadcasterInfo)(db, decoded.channel_id);
 
       let repos = [];
       if (user) {
-        repos = user.selected_repos.map(function (repo_id) {
-          return user.repos.find(function (repo) {
+        repos = user.selected_repos.map(repo_id => {
+          return user.repos.find(repo => {
             return repo.id === repo_id;
           });
         });
@@ -140,16 +140,16 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
       console.log(error);
       res.status(500).end();
     }
-  }));
+  });
 });
 
 exports.selectedReposOrder = functions.https.onRequest((req, res) => {
-  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+  cors(req, res, async () => {
     let response = {};
     let status_code = 200;
     let decoded;
 
-    const token = req.get(JWT_HEADER);
+    const token = req.get(_Constants.JWT_HEADER);
     const secret = getSecret();
     const selected_repos = req.param('selected_repos');
 
@@ -168,7 +168,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
         throw 'Must have at least one Github Project selected';
       }
 
-      yield (0, _Firebase.setSelectedRepos)(selected_repos, decoded);
+      await (0, _Firebase.setSelectedRepos)(db, selected_repos, decoded);
     } catch (error) {
       response = {
         error: 'something went wrong saving your selected repos' };
@@ -177,11 +177,11 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
     }
 
     res.status(status_code).json(response);
-  }));
+  });
 });
 
 exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
-  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+  cors(req, res, async () => {
     let response = {};
     let status_code = 200;
     let decoded;
@@ -208,12 +208,12 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
     }
 
     try {
-      let user = yield (0, _Firebase.getBroadcasterInfo)(decoded.channel_id);
+      let user = await (0, _Firebase.getBroadcasterInfo)(db, decoded.channel_id);
 
       if (user) {
         // Validate the selected repos belong to user
-        let exists = selected_repos.every(function (repo_id) {
-          return user.repos.find(function (repo) {
+        let exists = selected_repos.every(repo_id => {
+          return user.repos.find(repo => {
             return repo.id === repo_id;
           });
         });
@@ -224,7 +224,7 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
 
         }
 
-        response = yield (0, _Firebase.setSelectedRepos)(selected_repos, decoded);
+        response = await (0, _Firebase.setSelectedRepos)(db, selected_repos, decoded);
         status_code = 201;
       } else {
         res.status(400).json({
@@ -239,5 +239,5 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
     }
 
     res.status(status_code).json(response);
-  }));
+  });
 });
