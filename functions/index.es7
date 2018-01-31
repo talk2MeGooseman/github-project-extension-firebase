@@ -1,157 +1,42 @@
-const functions = require('firebase-functions');
-const axios = require('axios');
-const jwt = require('jsonwebtoken');
-const secrets = require('./secrets');
-// The Firebase Admin SDK to access the Firebase Realtime Database. 
-const admin = require('firebase-admin');
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
 admin.initializeApp(functions.config().firebase);
-const cors = require('cors')({origin: true});
 
-// Set env configs by firebase functions:config:set github.secret="SECRET"
-// Access set env configs via functions.config()
-const db = admin.firestore();
-const GITHUB_BASE_URL = 'https://api.github.com';
+import axios from 'axios';
+
+import secrets from './secrets';
+import {
+  decodeToken,
+  verifyToken,
+  signToken
+} from "./AuthToken";
+import {
+  setExtensionConfigured
+} from "./TwitchAPI";
+import {
+  getUserGithub,
+  getGithubRepos
+} from "./GithubAPI";
+import FirebaseAPI from "./Firebase";
+const {
+  saveGithubInfo,
+  setSelectedRepos,
+  getBroadcasterInfo,
+  getSelectedRepos
+} = FirebaseAPI(admin);
+
+// The Firebase Admin SDK to access the Firebase Realtime Database. 
+const cors = require('cors')({
+  origin: true
+});
+
 const JWT_HEADER = 'x-extension-jwt';
-const BROADCASTER_COLLECTION = 'broadcasters';
-const REPOS_COLLECTION = 'repos';
-
-const TWITCH_BASE_EXTENSION_URL = 'https://api.twitch.tv/extensions';
-const EXTENSION_VERSION = '0.0.1';
-const EXTENSION_ID = 'yncbd7i177on3ia536r307nlvt8g1w';
-const EXTENSTION_USER_ID = '120750024';
-const CONFIG_KEY = 'config-1';
 
 function getSecret() {
-    if (functions.config().twitch) {
-      return functions.config().twitch.secret;
-    } else {
-      return secrets['twitch']['secret'];
-    } 
-}
-
-function decodeToken(token, secret) {
-  const secret_decoded = new Buffer(secret, 'base64');
-  return jwt.verify(token, secret_decoded);
-}
-
-function verifyToken(token, secret) {
-  const decoded = decodeToken(token, secret);
-  if(decoded.role != 'broadcaster') throw 'Must be broadcaster role.'
-
-  return decoded;
-}
-
-function signToken(secret) {
-  const secret_decoded = new Buffer(secret, 'base64');
-  const tokenObj = {
-    "user_id": EXTENSTION_USER_ID,
-    "role": "external"    
-  };
-
-  return jwt.sign(tokenObj, secret_decoded, {
-    expiresIn: '1h'
-  });
-}
-
-async function setExtensionConfigured(channel_id) {
-  try {
-    const token = signToken(getSecret());
-
-    let response = await axios({
-      method: 'PUT',
-      url: `${TWITCH_BASE_EXTENSION_URL}/${EXTENSION_ID}/${EXTENSION_VERSION}/required_configuration?channel_id=${channel_id}`,
-      data: {
-        "required_configuration": CONFIG_KEY,
-      },
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-id': EXTENSION_ID,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    return await response.json;
-  } catch (error) {
-    console.log(error);
-  }
-}
-
-async function getUserGithub(username, decoded) {
-  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
-  const repos = await getGithubRepos(username, decoded.channel_id);
-
-  const user = {
-    user_id: decoded.user_id,
-    github_user: {
-      login: data.login,
-      avatar_url: data.avatar_url,
-      repos_url: data.repos_url,
-      public_repos: data.public_repos,
-    },
-    repos
-  };
-
-  return user;
-}
-
-async function getGithubRepos(username, channel_id) {
-  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}/repos`, { type: 'all'});
-
-  // Fetch the data we want from each repo
-  return data.map(repo => {
-    let { id, name, html_url, full_name, description, language } = repo;
-    return {
-      id: id.toString(),
-      name,
-      html_url,
-      full_name,
-      description,
-      language,
-    };
-  });
-}
-
-async function saveGithubInfo(data, decoded) {
-  var saveRef = db.collection(BROADCASTER_COLLECTION);
-
-  saveRef.doc(decoded.channel_id).set(data);
-}
-
-async function setSelectedRepos(selected_repos, decoded) {
-  var saveRef = db.collection(BROADCASTER_COLLECTION);
-  await saveRef.doc(decoded.channel_id).set({
-    selected_repos: selected_repos,
-  }, { merge: true });
-
-  return getBroadcasterInfo(decoded.channel_id);
-}
-
-async function getSelectedRepos(channel_id, selected_repos) {
-  var channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
-
-  try {
-    const doc = await channelRef.get(); 
-    // returns promise till data is resolved
-    const userData = await doc.data();
-  } catch (error) {
-    console.log(error);
-    return null; 
-  } 
-
-  return userData.selected_repos.map((repo_id) => {
-    return userData.repos.find((repo) => repo.id === repo_id);
-  });
-}
-
-async function getBroadcasterInfo(channel_id) {
-  const channelRef = db.collection(BROADCASTER_COLLECTION).doc(channel_id);
-  try {
-    const doc = await channelRef.get(); 
-    // returns promise till data is resolved
-    return doc.data();
-  } catch (error) {
-    console.log(error);
-    return null; 
+  if (functions.config().twitch) {
+    return functions.config().twitch.secret;
+  } else {
+    return secrets['twitch']['secret'];
   }
 }
 
@@ -159,13 +44,15 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     let decoded;
 
-    const { username } = req.param('data');
+    const {
+      username
+    } = req.param('data');
     const auth = req.param('auth');
-    const secret = getSecret();    
+    const secret = getSecret();
 
     try {
       decoded = verifyToken(auth.token, secret);
-    } catch(err) {
+    } catch (err) {
       console.log('JWT was invalid', err);
       res.status(401).json({});
       return;
@@ -179,7 +66,7 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     } catch (error) {
       status_code = 400;
       console.log(error)
-      response = { };
+      response = {};
     }
 
     console.log(response)
@@ -192,7 +79,7 @@ exports.getBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     try {
       // Get token from header
       const token = req.get(JWT_HEADER);
-      const secret = getSecret();    
+      const secret = getSecret();
 
       // Verify our token
       let decoded = verifyToken(token, secret);
@@ -217,7 +104,7 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     try {
       const token = req.get(JWT_HEADER);
-      const secret = getSecret();    
+      const secret = getSecret();
       let decoded;
 
       try {
@@ -230,7 +117,7 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
       let user = await getBroadcasterInfo(decoded.channel_id);
 
       let repos = [];
-      if(user) {
+      if (user) {
         repos = user.selected_repos.map((repo_id) => {
           return user.repos.find((repo) => {
             return repo.id === repo_id;
@@ -239,7 +126,10 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
       }
 
       if (user && repos) {
-        res.status(200).json({ user, repos });
+        res.status(200).json({
+          user,
+          repos
+        });
       } else {
         res.status(404).end();
       }
@@ -258,25 +148,29 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
     let decoded;
 
     const token = req.get(JWT_HEADER);
-    const secret = getSecret();    
+    const secret = getSecret();
     const selected_repos = req.param('selected_repos');
 
     try {
       decoded = verifyToken(token, secret);
     } catch (error) {
       console.log('JWT was invalid', err);
-      res.status(401).json({error: err});
+      res.status(401).json({
+        error: err
+      });
       return;
     }
 
     try {
       if (selected_repos.length === 0) {
         throw ('Must have at least one Github Project selected');
-      }           
+      }
 
       await setSelectedRepos(selected_repos, decoded);
     } catch (error) {
-      response = { error: 'something went wrong saving your selected repos'};
+      response = {
+        error: 'something went wrong saving your selected repos'
+      };
       status_code = 400;
     }
 
@@ -290,45 +184,53 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
     let status_code = 200;
     let decoded;
 
-    const { selected_repos} = req.param('data');
+    const {
+      selected_repos
+    } = req.param('data');
     const auth = req.param('auth');
-    const secret = getSecret();    
+    const secret = getSecret();
 
     // Validate token and fetch data
     try {
       decoded = verifyToken(auth.token, secret);
 
       if (selected_repos.length === 0) {
-          throw('Must have at least one Github Project selected');
+        throw ('Must have at least one Github Project selected');
       }
-    } catch(err) {
+    } catch (err) {
       console.log('JWT was invalid', err);
-      res.status(401).json({error: err});
+      res.status(401).json({
+        error: err
+      });
       return;
     }
 
     try {
       let user = await getBroadcasterInfo(decoded.channel_id);
 
-      if(user) {
+      if (user) {
         // Validate the selected repos belong to user
         let exists = selected_repos.every((repo_id) => {
           return user.repos.find((repo) => {
             return repo.id === repo_id;
           });
-        }); 
+        });
 
         if (!exists) {
-          res.status(400).json({ error: 'Error happend during config, please start over' });
+          res.status(400).json({
+            error: 'Error happend during config, please start over'
+          });
         }
 
         response = await setSelectedRepos(selected_repos, decoded);
         status_code = 201;
       } else {
-        res.status(400).json({ error: 'Your Github information does not exist, please restart setup'});
+        res.status(400).json({
+          error: 'Your Github information does not exist, please restart setup'
+        });
       }
 
-      setExtensionConfigured(decoded.channel_id);
+      setExtensionConfigured(decoded.channel_id, getSecret());
     } catch (error) {
       status_code = 400;
       console.log(error)
