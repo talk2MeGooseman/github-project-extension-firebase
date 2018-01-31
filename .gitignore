@@ -2,6 +2,8 @@
 /dist
 /tmp
 
+functions/secrets.json
+
 # dependencies
 /node_modules
 
