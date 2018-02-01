@@ -14,7 +14,7 @@ export async function setSelectedRepos(db, selected_repos, decoded) {
     merge: true
   });
 
-  return getBroadcasterInfo(decoded.channel_id);
+  return getBroadcasterInfo(db, decoded.channel_id);
 }
 
 export async function getSelectedRepos(db, channel_id, selected_repos) {
