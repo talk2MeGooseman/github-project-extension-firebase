@@ -3,7 +3,15 @@ import { BROADCASTER_COLLECTION } from './Constants';
 export async function saveGithubInfo(db, data, decoded) {
   var saveRef = db.collection(BROADCASTER_COLLECTION);
 
-  saveRef.doc(decoded.channel_id).set(data);
+  return saveRef.doc(decoded.channel_id).set(data);
+}
+
+export async function saveGithubRepos(db, repos, decoded) {
+  var saveRef = db.collection(BROADCASTER_COLLECTION);
+
+  return saveRef.doc(decoded.channel_id).set({
+    repos: repos
+  }, { merge: true });
 }
 
 export async function setSelectedRepos(db, selected_repos, decoded) {

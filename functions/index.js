@@ -27,6 +27,7 @@ var _Firebase = require('./Firebase');
 
 
 
+
 var _Constants = require('./Constants');function _interopRequireWildcard(obj) {if (obj && obj.__esModule) {return obj;} else {var newObj = {};if (obj != null) {for (var key in obj) {if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key];}}newObj.default = obj;return newObj;}}function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}admin.initializeApp(functions.config().firebase); // Set env configs by firebase functions:config:set github.secret="SECRET"
 // Access set env configs via functions.config()
 const db = admin.firestore(); // The Firebase Admin SDK to access the Firebase Realtime Database. 
@@ -238,6 +239,39 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
       console.log(error);
     }
 
+    res.status(status_code).json(response);
+  }));
+});
+
+exports.refreshUsersRepos = functions.https.onRequest((req, res) => {
+  cors(req, res, (0, _asyncToGenerator3.default)(function* () {
+    let decoded;
+
+    const token = req.get(_Constants.JWT_HEADER);
+    const secret = getSecret();
+
+    try {
+      decoded = (0, _AuthToken.verifyToken)(token, secret);
+    } catch (err) {
+      console.log('JWT was invalid', err);
+      res.status(401).json({});
+      return;
+    }
+
+    let response = {};
+    let status_code = 200;
+    try {
+      let user = yield (0, _Firebase.getBroadcasterInfo)(db, decoded.channel_id);
+      const repos = yield (0, _GithubAPI.getGithubRepos)(user.github_user.login, decoded.channel_id);
+      yield (0, _Firebase.saveGithubRepos)(db, repos, decoded);
+      response = { repos };
+    } catch (error) {
+      status_code = 400;
+      console.log(error);
+      response = {};
+    }
+
+    console.log(response);
     res.status(status_code).json(response);
   }));
 });

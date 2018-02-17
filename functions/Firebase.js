@@ -1,10 +1,18 @@
-'use strict';Object.defineProperty(exports, "__esModule", { value: true });exports.getBroadcasterInfo = exports.getSelectedRepos = exports.setSelectedRepos = exports.saveGithubInfo = undefined;var _asyncToGenerator2 = require('babel-runtime/helpers/asyncToGenerator');var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);let saveGithubInfo = exports.saveGithubInfo = (() => {var _ref = (0, _asyncToGenerator3.default)(
+'use strict';Object.defineProperty(exports, "__esModule", { value: true });exports.getBroadcasterInfo = exports.getSelectedRepos = exports.setSelectedRepos = exports.saveGithubRepos = exports.saveGithubInfo = undefined;var _asyncToGenerator2 = require('babel-runtime/helpers/asyncToGenerator');var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);let saveGithubInfo = exports.saveGithubInfo = (() => {var _ref = (0, _asyncToGenerator3.default)(
 
   function* (db, data, decoded) {
     var saveRef = db.collection(_Constants.BROADCASTER_COLLECTION);
 
-    saveRef.doc(decoded.channel_id).set(data);
-  });return function saveGithubInfo(_x, _x2, _x3) {return _ref.apply(this, arguments);};})();let setSelectedRepos = exports.setSelectedRepos = (() => {var _ref2 = (0, _asyncToGenerator3.default)(
+    return saveRef.doc(decoded.channel_id).set(data);
+  });return function saveGithubInfo(_x, _x2, _x3) {return _ref.apply(this, arguments);};})();let saveGithubRepos = exports.saveGithubRepos = (() => {var _ref2 = (0, _asyncToGenerator3.default)(
+
+  function* (db, repos, decoded) {
+    var saveRef = db.collection(_Constants.BROADCASTER_COLLECTION);
+
+    return saveRef.doc(decoded.channel_id).set({
+      repos: repos },
+    { merge: true });
+  });return function saveGithubRepos(_x4, _x5, _x6) {return _ref2.apply(this, arguments);};})();let setSelectedRepos = exports.setSelectedRepos = (() => {var _ref3 = (0, _asyncToGenerator3.default)(
 
   function* (db, selected_repos, decoded) {
     var saveRef = db.collection(_Constants.BROADCASTER_COLLECTION);
@@ -15,7 +23,7 @@
 
 
     return getBroadcasterInfo(db, decoded.channel_id);
-  });return function setSelectedRepos(_x4, _x5, _x6) {return _ref2.apply(this, arguments);};})();let getSelectedRepos = exports.getSelectedRepos = (() => {var _ref3 = (0, _asyncToGenerator3.default)(
+  });return function setSelectedRepos(_x7, _x8, _x9) {return _ref3.apply(this, arguments);};})();let getSelectedRepos = exports.getSelectedRepos = (() => {var _ref4 = (0, _asyncToGenerator3.default)(
 
   function* (db, channel_id, selected_repos) {
     var channelRef = db.collection(_Constants.BROADCASTER_COLLECTION).doc(channel_id);
@@ -32,7 +40,7 @@
     return userData.selected_repos.map(function (repo_id) {
       return userData.repos.find(function (repo) {return repo.id === repo_id;});
     });
-  });return function getSelectedRepos(_x7, _x8, _x9) {return _ref3.apply(this, arguments);};})();let getBroadcasterInfo = exports.getBroadcasterInfo = (() => {var _ref4 = (0, _asyncToGenerator3.default)(
+  });return function getSelectedRepos(_x10, _x11, _x12) {return _ref4.apply(this, arguments);};})();let getBroadcasterInfo = exports.getBroadcasterInfo = (() => {var _ref5 = (0, _asyncToGenerator3.default)(
 
   function* (db, channel_id) {
     const channelRef = db.collection(_Constants.BROADCASTER_COLLECTION).doc(channel_id);
@@ -44,4 +52,4 @@
       console.log(error);
       return null;
     }
-  });return function getBroadcasterInfo(_x10, _x11) {return _ref4.apply(this, arguments);};})();var _Constants = require('./Constants');function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}
+  });return function getBroadcasterInfo(_x13, _x14) {return _ref5.apply(this, arguments);};})();var _Constants = require('./Constants');function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}

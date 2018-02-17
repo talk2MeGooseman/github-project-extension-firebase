@@ -25,7 +25,8 @@ import {
   saveGithubInfo,
   setSelectedRepos,
   getBroadcasterInfo,
-  getSelectedRepos
+  getSelectedRepos,
+  saveGithubRepos
 } from "./Firebase";
 import { JWT_HEADER } from "./Constants";
 
@@ -238,6 +239,39 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
       console.log(error)
     }
 
+    res.status(status_code).json(response);
+  });
+});
+
+exports.refreshUsersRepos = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    let decoded;
+
+    const token = req.get(JWT_HEADER);
+    const secret = getSecret();
+
+    try {
+      decoded = verifyToken(token, secret);
+    } catch (err) {
+      console.log('JWT was invalid', err);
+      res.status(401).json({});
+      return;
+    }
+
+    let response = {};
+    let status_code = 200;
+    try {
+      let user = await getBroadcasterInfo(db, decoded.channel_id);
+      const repos = await getGithubRepos(user.github_user.login, decoded.channel_id);
+      await saveGithubRepos(db, repos, decoded);
+      response = { repos };
+    } catch (error) {
+      status_code = 400;
+      console.log(error)
+      response = {};
+    }
+
+    console.log(response)
     res.status(status_code).json(response);
   });
 });
