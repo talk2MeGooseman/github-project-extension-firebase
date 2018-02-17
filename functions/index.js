@@ -119,7 +119,7 @@ exports.viewBroadcasterData = functions.https.onRequest((req, res) => {
       let user = yield (0, _Firebase.getBroadcasterInfo)(db, decoded.channel_id);
 
       let repos = [];
-      if (user) {
+      if (user && user.selected_repos) {
         repos = user.selected_repos.map(function (repo_id) {
           return user.repos.find(function (repo) {
             return repo.id === repo_id;

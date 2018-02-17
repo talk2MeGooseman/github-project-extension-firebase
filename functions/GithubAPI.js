@@ -19,11 +19,18 @@
     return user;
   });return function getUserGithub(_x, _x2) {return _ref.apply(this, arguments);};})();let getGithubRepos = exports.getGithubRepos = (() => {var _ref2 = (0, _asyncToGenerator3.default)(
 
-  function* (username, channel_id) {
-    const { data } = yield _axios2.default.get(`${_Constants.GITHUB_BASE_URL}/users/${username}/repos`, { type: 'all' });
+  function* (username, channel_id, page = 1) {
+    const { data, headers } = yield _axios2.default.get(`${_Constants.GITHUB_BASE_URL}/users/${username}/repos`, {
+      params: {
+        type: 'all',
+        per_page: 100,
+        sort: 'pushed',
+        page: page } });
 
-    // Fetch the data we want from each repo
-    return data.map(function (repo) {
+
+
+    // Format the data we want from each repo
+    let repos = data.map(function (repo) {
       let { id, name, html_url, full_name, description, language } = repo;
       return {
         id: id.toString(),
@@ -34,4 +41,15 @@
         language };
 
     });
+
+    // Check if there any other pages, then fetch them
+    const pagesHeader = headers['link'];
+    if (pagesHeader && pagesHeader.includes(`rel="last"`)) {
+      // Fetch next page
+      let pagedRepos = yield getGithubRepos(username, channel_id, page + 1);
+      // Append to the end of the repos array to keep order
+      repos = repos.concat(pagedRepos);
+    }
+
+    return repos;
   });return function getGithubRepos(_x3, _x4) {return _ref2.apply(this, arguments);};})();var _axios = require('axios');var _axios2 = _interopRequireDefault(_axios);var _Constants = require('./Constants');function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}
