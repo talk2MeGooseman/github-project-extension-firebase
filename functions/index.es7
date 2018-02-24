@@ -50,11 +50,11 @@ exports.setBroadcasterGithubInfo = functions.https.onRequest((req, res) => {
     const {
       username
     } = req.param('data');
-    const auth = req.param('auth');
+    const token = req.get(JWT_HEADER);
     const secret = getSecret();
 
     try {
-      decoded = verifyToken(auth.token, secret);
+      decoded = verifyToken(token, secret);
     } catch (err) {
       console.log('JWT was invalid', err);
       res.status(401).json({});
@@ -190,12 +190,12 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
     const {
       selected_repos
     } = req.param('data');
-    const auth = req.param('auth');
+    const token = req.get(JWT_HEADER);
     const secret = getSecret();
 
     // Validate token and fetch data
     try {
-      decoded = verifyToken(auth.token, secret);
+      decoded = verifyToken(token, secret);
 
       if (selected_repos.length === 0) {
         throw ('Must have at least one Github Project selected');
