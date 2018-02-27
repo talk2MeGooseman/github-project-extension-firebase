@@ -1,8 +1,25 @@
 import axios from 'axios';
+import * as functions from 'firebase-functions';
 import { GITHUB_BASE_URL } from "./Constants";
 
+function getCredentials() {
+  if (functions.config().github) {
+    return {
+      client_id: functions.config().github.client_id,
+      client_secret: functions.config().github.client_secret,
+    }
+  } else {
+    return {};
+  }
+}
+
 export async function getUserGithub(username, decoded) {
-  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`);
+  const creds = getCredentials();
+  const { data } = await axios.get(`${GITHUB_BASE_URL}/users/${username}`, {
+    params: {
+      ...creds
+    }
+  });
   const repos = await getGithubRepos(username, decoded.channel_id);
 
   const user = {
@@ -20,12 +37,14 @@ export async function getUserGithub(username, decoded) {
 }
 
 export async function getGithubRepos(username, channel_id, page = 1) {
+  const creds = getCredentials();
   const { data, headers } = await axios.get(`${GITHUB_BASE_URL}/users/${username}/repos`, {
     params: {
       type: 'all',
       per_page: 100,
       sort: 'pushed',
       page: page,
+      ...creds
     }
   });
 
