@@ -7,3 +7,4 @@ export const EXTENSION_VERSION = '0.0.3';
 export const EXTENSION_ID = 'yncbd7i177on3ia536r307nlvt8g1w';
 export const EXTENSTION_USER_ID = '120750024';
 export const CONFIG_KEY = 'config-1';
+export const VERSION_HEADER = 'version';

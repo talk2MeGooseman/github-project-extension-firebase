@@ -6,13 +6,12 @@
 
 
 
-
-  function* (channel_id, secret) {
+  function* (channel_id, secret, version) {
     const token = (0, _AuthToken.signToken)(secret);
 
     let response = yield (0, _axios2.default)({
       method: 'PUT',
-      url: `${_Constants.TWITCH_BASE_EXTENSION_URL}/${_Constants.EXTENSION_ID}/${_Constants.EXTENSION_VERSION}/required_configuration?channel_id=${channel_id}`,
+      url: `${_Constants.TWITCH_BASE_EXTENSION_URL}/${_Constants.EXTENSION_ID}/${version}/required_configuration?channel_id=${channel_id}`,
       data: {
         "required_configuration": _Constants.CONFIG_KEY },
 
@@ -22,4 +21,4 @@
         'Authorization': `Bearer ${token}` } });
 
 
-  });return function setExtensionConfigured(_x, _x2) {return _ref.apply(this, arguments);};})();var _axios = require("axios");var _axios2 = _interopRequireDefault(_axios);var _Constants = require("./Constants");var _AuthToken = require("./AuthToken");function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}
+  });return function setExtensionConfigured(_x, _x2, _x3) {return _ref.apply(this, arguments);};})();var _axios = require("axios");var _axios2 = _interopRequireDefault(_axios);var _Constants = require("./Constants");var _AuthToken = require("./AuthToken");function _interopRequireDefault(obj) {return obj && obj.__esModule ? obj : { default: obj };}

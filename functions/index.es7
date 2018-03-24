@@ -28,7 +28,7 @@ import {
   getSelectedRepos,
   saveGithubRepos
 } from "./Firebase";
-import { JWT_HEADER } from "./Constants";
+import { JWT_HEADER, VERSION_HEADER } from "./Constants";
 
 // The Firebase Admin SDK to access the Firebase Realtime Database. 
 const cors = require('cors')({
@@ -191,6 +191,7 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
       selected_repos
     } = req.param('data');
     const token = req.get(JWT_HEADER);
+    const version = req.get(VERSION_HEADER);
     const secret = getSecret();
 
     // Validate token and fetch data
@@ -233,7 +234,8 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
         });
       }
 
-      setExtensionConfigured(decoded.channel_id, getSecret());
+      // IMPORTANT: MUST SET EXTENSION IS CONFIGURED
+      setExtensionConfigured(decoded.channel_id, getSecret(), version);
     } catch (error) {
       status_code = 400;
       console.log(error)

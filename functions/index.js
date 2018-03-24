@@ -191,6 +191,7 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
       selected_repos } =
     req.param('data');
     const token = req.get(_Constants.JWT_HEADER);
+    const version = req.get(_Constants.VERSION_HEADER);
     const secret = getSecret();
 
     // Validate token and fetch data
@@ -233,7 +234,8 @@ exports.setUserSelectedRepos = functions.https.onRequest((req, res) => {
 
       }
 
-      (0, _TwitchAPI.setExtensionConfigured)(decoded.channel_id, getSecret());
+      // IMPORTANT: MUST SET EXTENSION IS CONFIGURED
+      (0, _TwitchAPI.setExtensionConfigured)(decoded.channel_id, getSecret(), version);
     } catch (error) {
       status_code = 400;
       console.log(error);
