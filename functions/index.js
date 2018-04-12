@@ -177,6 +177,7 @@ exports.selectedReposOrder = functions.https.onRequest((req, res) => {
       status_code = 400;
     }
 
+    (0, _TwitchAPI.setExtensionConfigured)(decoded.channel_id, getSecret());
     res.status(status_code).json(response);
   }));
 });

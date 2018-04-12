@@ -12,7 +12,7 @@ export async function setExtensionConfigured(channel_id, secret, version=EXTENSI
 
   let response = await axios({
     method: 'PUT',
-    url: `${TWITCH_BASE_EXTENSION_URL}/${EXTENSION_ID}/${version}/required_configuration?channel_id=${channel_id}`,
+    url: `${TWITCH_BASE_EXTENSION_URL}/${EXTENSION_ID}/${EXTENSION_VERSION}/required_configuration?channel_id=${channel_id}`,
     data: {
       "required_configuration": CONFIG_KEY,
     },
